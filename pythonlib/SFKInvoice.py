@@ -1,26 +1,26 @@
 import argparse
 from datetime import date, datetime, timedelta
-import pandas as pd # type: ignore
-import numpy as np # type: ignore
-from reportlab.pdfgen import canvas # type: ignore
-from reportlab.pdfbase.ttfonts import TTFont # type: ignore
-from reportlab.pdfbase import pdfmetrics # type: ignore
-from reportlab.lib import colors # type: ignore
-from reportlab.lib.pagesizes import A4 # type: ignore
-from reportlab.lib.units import cm # type: ignore
-from reportlab.platypus import Table, TableStyle, Image # type: ignore
-from pythonlib.rotatedtext import verticalText # type: ignore
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ParagraphAndImage # type: ignore
-from reportlab.lib.styles import getSampleStyleSheet # type: ignore
-from reportlab.rl_config import defaultPageSize # type: ignore
-from reportlab.lib.units import cm, inch, mm # type: ignore
-from reportlab.lib.colors import Color, HexColor # type: ignore
-from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER # type: ignore
-from reportlab.lib.styles import ParagraphStyle # type: ignore
+import pandas as pd
+import numpy as np
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.platypus import Table, TableStyle, Image
+from pythonlib.rotatedtext import verticalText
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, ParagraphAndImage
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.rl_config import defaultPageSize
+from reportlab.lib.units import cm, inch, mm
+from reportlab.lib.colors import Color, HexColor
+from reportlab.lib.enums import TA_RIGHT, TA_LEFT, TA_CENTER
+from reportlab.lib.styles import ParagraphStyle
 
 
 # https://stackoverflow.com/questions/13061545/rotated-document-with-reportlab-vertical-text
-from reportlab.graphics.shapes import Drawing, Group, String # type: ignore
+from reportlab.graphics.shapes import Drawing, Group, String
 
 """Create PDF invoice"""
 
@@ -33,10 +33,10 @@ python create_pdf.py 123
 width, height = A4
 today = date.today()
 
-pdfmetrics.registerFont(TTFont('arimo', 'static_files/fonts/Arimo-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('arimo-bold', 'static_files/fonts/Arimo-Bold.ttf'))
-pdfmetrics.registerFont(TTFont('martel', 'static_files/fonts/MartelSans-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('martel-bold', 'static_files/fonts/MartelSans-Bold.ttf'))
+pdfmetrics.registerFont(TTFont('arimo', 'files/fonts/Arimo-Regular.ttf'))
+pdfmetrics.registerFont(TTFont('arimo-bold', 'files/fonts/Arimo-Bold.ttf'))
+pdfmetrics.registerFont(TTFont('martel', 'files/fonts/MartelSans-Regular.ttf'))
+pdfmetrics.registerFont(TTFont('martel-bold', 'files/fonts/MartelSans-Bold.ttf'))
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument("pdf_no")
@@ -58,9 +58,9 @@ sfk_lines = [
     '435 41 Mölnlycke',
     'Sverige'
 ]
-sfk_image = 'static_files/sfk_logo_small.png'
-sfk_text_image = 'static_files/sfk-ol-text.png'
-qr_image = 'static_files/qr_subventioner_invoice.png'
+sfk_image = 'files/sfk_logo_small.png'
+sfk_text_image = 'files/sfk-ol-text.png'
+qr_image = 'files/qr_subventioner_invoice.png'
 sfk_contact = [
     'Vid förfrågningar angående denna faktura, kontakta:',
     '&nbsp;',
@@ -165,7 +165,6 @@ class SFKInvoice:
                                      leftMargin = 1 * cm, rightMargin = 1 * cm)
         self.Story = []
 
-        #print(f"SFKInvoice {self.data}")
         self.generateReport(self.data)
 
     def onMyFirstPage(self, canvas, doc):
@@ -251,7 +250,7 @@ class SFKInvoice:
         canvas.restoreState()
 
     def generateReport(self, data):
-        print("Generation report:", data["invoice_no"], data["name"], data ['total_amount'])
+        #print("Generation report:", data["invoice_no"], data["name"])
         self.reportContent(data)
         self.doc.build(self.Story, canvasmaker=NumberedCanvas, 
                        onFirstPage=self.onMyFirstPage,
@@ -283,20 +282,21 @@ class SFKInvoice:
         # TODO: Get from Excel instead?
         totalt_pris = 0 # Pris + Efteranmälningsavgift
         for row in data["rows"]:
-            #if 'Axel Hellstrand' in row['text']:
-            #    print(row)
+            #print(row)
             items.append([row["id"], row["text"]])
             items.append(['', '', '1', row["status"], str(row["amount"])+ " kr", str(row["late_fee"])+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]) + " kr"])
             #totalt_belopp += row["to_pay"]
-            totalt_pris += row["amount"] + row["late_fee"]
+            # Late fee included in amount
+            #totalt_pris += row["amount"] + row["late_fee"]
+            totalt_pris += row["amount"]
 
         # TODO Justeringar!!!
 
         #exit(1)
 
-        #data4 = [['Id', 'Benämning', 'Antal', 'Status', 'Pris', 'Subvention', 'Belopp'],
-        #     ['1234', 'A Anmälan för XXXXXXXXX YYYYYYYYYYY i DM, D20', '', '', '', '', ''],
-        #     ['', '', '1', 'Ej start', '14 kr', '(40%) 140 kr', '0 kr']]
+        data4 = [['Id', 'Benämning', 'Antal', 'Status', 'Pris', 'Subvention', 'Belopp'],
+             ['1234', 'A Anmälan för XXXXXXXXX YYYYYYYYYYY i DM, D20', '', '', '', '', ''],
+             ['', '', '1', 'Ej start', '14 kr', '(40%) 140 kr', '0 kr']]
 
         # Add Invoice specification as a table
         t=Table(items,colWidths=[None,6*cm, None],
@@ -358,18 +358,7 @@ class SFKInvoice:
 
         # TODO Se parse.. om kommentar
         #if data['name'] not in ["Claes Björkman","Ebbe Holmqvist", "Emelina Holmqvist", "Johan Hjelmér", "Jonathan Brolin", "Mailis Holmqvist"]:
-        # 230815 Issue: What is the problem? Why does it not sum up?
-        #print(f"Totalt amount: {data['total_amount']}")
-        #print(f"{totalt_pris} - {data['total_discount']} + {data['total_adjustment']} = {totalt_pris - data['total_discount'] + data['total_adjustment']}")
-        
-        #assert data['total_amount'] == totalt_pris - data['total_discount'] + data['total_adjustment'], "Check of total amount to pay must ok"
-        #str = f"Problem with verification for {data['invoice_no']} {data['name']}"
-        # Extra verification
-        if data['total_amount'] != (totalt_pris - data['total_discount'] + data['total_adjustment']):
-            print(f"Problem with verification for {data['invoice_no']} {data['name']}")
-            print(f"totalt_amount: {data['total_amount']} != {(totalt_pris - data['total_discount'] + data['total_adjustment'])} (totalt_pris: {totalt_pris} - total_discount: {data['total_discount']} + total_adjustment: {data['total_adjustment']}))")
-            exit(1)
-            
+        assert abs(data['total_amount'] - (totalt_pris - data['total_discount'] + data['total_adjustment'])) < 1
         #p = Paragraph(f"Summa belopp: {data['total_discount']} kr", style1)
         #story.append(p)
         story.append(Spacer(1, 0.5*cm))
@@ -384,7 +373,7 @@ class SFKInvoice:
             fontName='arimo',
             fontSize=10,
         )
-        p = Paragraph(f"Var god betala var faktura för sig. Märk aktuell faktura med text: \"{data['invoice_no']} {data['name']}\"", style)
+        p = Paragraph(f"Var god betala var faktura för sig. Märk aktuell faktura med text: {data['invoice_no']} {data['name']}", style)
         story.append(p)
         p = Paragraph(f"Tack för hjälpen!", style)
         story.append(p)

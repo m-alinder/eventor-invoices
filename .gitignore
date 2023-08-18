@@ -17,9 +17,14 @@ invoice_x.pdf
 send_commands.sh
 log_invoices_*
 
+# Eventor Cache
+eventor-cache/
+
 # python virtualenv
 env/**
-.venv/**
-.DS_Store
 
 container/**
+
+*.xls
+*.xlsx
+*.pdf
