@@ -182,13 +182,22 @@ def translate_to_swe(word):
 def get_age(birthDate,eventDate):
     return eventDate.year - birthDate.year
 
-def check_ok(status):
-    nok = status == '' or status == 'Ej Start' or status == 'Tjänst'
-    return not nok
+def paid_cash(competition:str):
+    # Usually paid cash
+    return re.search(r"veteran|skogsflicks|motionsorientering", competition, re.IGNORECASE) != None
 
-assert check_ok('') == False
-assert check_ok('Ej Start') == False
-assert check_ok('OK') == True
+def is_relay(competition_type:str):
+    return re.search(r'stafett', competition_type, re.IGNORECASE) != None
+
+def check_ok(status, competition, competition_type):
+    nok = status == '' or status == 'Ej Start' or status == 'Tjänst'
+
+    # Competitions payed cash and Relays are always ok
+    return not nok or paid_cash(competition) or is_relay(competition_type)
+
+assert check_ok('', '', '') == False
+assert check_ok('Ej Start', '', '') == False
+assert check_ok('OK', '', '') == True
 
 def normalize_amount(amount):
     return int(float(amount.replace(",","."))) if type(amount) == str else int(amount)
@@ -218,7 +227,7 @@ def calculate_discount(valid:bool, competition:str, age) -> int:
         column = "Barn"
 
     try:
-        return dfDiscounts.loc[dfDiscounts['Tävling'] == competition][column]
+        return dfDiscounts.loc[dfDiscounts['Tävling'] == competition][column][0]
     except:
         # Standard discount
         return 40
@@ -227,74 +236,46 @@ def calculate_discount(valid:bool, competition:str, age) -> int:
 assert calculate_discount(False, "", 10) == 0
 assert calculate_discount(False, "", 40) == 0
 
-def calculate_late_fee_discount(lateFee, age, competition):
-    """Calculates late fee discount amount
-    Necessary for some cases
-    """
-    lateFee = normalize_fee(lateFee)
-#    if age < 21:
-#        if re.search(r"vårserie|dm, ", competition, re.IGNORECASE) != None:
-#            return lateFee
-
-    try:
-        publiktävling = re.search(r"publiktävling", competition, re.IGNORECASE) != None
-        if re.search(r"stafett|kavlen|veteran|i 25manna|skogsflicks|vårserie|dm, ", competition, re.IGNORECASE) != None and not publiktävling:
-#            print(competition + " " + str(lateFee))
-            return lateFee
-    except:
-        return lateFee
-
-    return 0
-
-assert calculate_late_fee_discount("50", 16, "En tävling") == 0
-assert calculate_late_fee_discount("0", 16, "En tävling") == 0
-assert calculate_late_fee_discount("50", 16, "En vårserie-tävling") == 50
-assert calculate_late_fee_discount("50", 25, "En vårserie-tävling") == 50
-assert calculate_late_fee_discount("50", 25, "En tävling") == 0
-assert calculate_late_fee_discount("50", 16, "En stafett-tävling") == 50
-assert calculate_late_fee_discount("50", 25, "En stafett-tävling") == 50
-assert calculate_late_fee_discount("250,20", 25, "Sjövalla FK 1 i 25manna") == 250
-
-def calculate_discount_amount(amount, lateFee, competition:str, age, valid, discount, person):
+def calculate_discount_amount(amount, lateFee, competition:str, competition_type:str, age, valid, discount, person):
     """Calculate only discounted amount
     
     In certain cases (e.g., relays) also lateFee might be in subject for discount
     """
-    #print(f"[calculate_discount_amount] amount: '{amount}' latefee: '{lateFee}' '{competition}' age: '{age}' valid: '{valid}' d: '{discount}' p: '{person}'")
-    if not valid:
-        return 0
-
-    # Ej start, tjänst ger 0% subvention
-    if discount == 0:
-        return 0
 
     amount = normalize_amount(amount) 
     lateFee = normalize_fee(lateFee)
 
-    if discount == 100:
-        discount_amount = amount
-        return discount_amount
+    # Pay nothing for relay or paid with cash
+    if (paid_cash(competition) or is_relay(competition_type)):
+        return amount
 
-    elif discount == 40:
+    #print(f"[calculate_discount_amount] amount: '{amount}' latefee: '{lateFee}' '{competition}' age: '{age}' valid: '{valid}' d: '{discount}' p: '{person}'")
+    if not valid:
+        return 0
+
+    if (amount == lateFee):
+        # Assume normal fee when aount equals lateFee
+        discount_amount = round((amount) * (discount / 100))
+    else:
         # Amount contains total fee, lateFee included.
         # We only discount for the standard fee
         discount_amount = round((amount-lateFee) * (discount / 100))
-        return discount_amount
 
-    raise Exception(f"Wrong discount {discount}")
+    return discount_amount
 
 # Amount is total fee to pay, lateFee already part of amount.
-assert calculate_discount_amount("100", "0", "En tävling", 25, False, 40, "Person") == 0
-assert calculate_discount_amount("100", "0", "En tävling", 25, True, 40, "Person") == 40
-assert calculate_discount_amount("100", "0", "En tävling", 25, False, 100, "Person") == 0
-assert calculate_discount_amount("100", "0", "En tävling", 25, True, 100, "Person") == 100
-assert calculate_discount_amount("120", "20", "Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", 16, True, 100, "Person") == 120
-assert calculate_discount_amount("120", "20", "Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", 25, True, 100, "Person") == 120
-assert calculate_discount_amount("150", "50", "En tävling", 16, True, 40, "Person") == 40
-assert calculate_discount_amount("150", "50", "En stafett-tävling", 16, True, 100, "Person") == 150
-assert calculate_discount_amount("150", "50", "En tävling", 25, True, 40, "Person") == 40
-assert calculate_discount_amount("150", "50", "En stafett-tävling", 25, True, 100, "Person") == 150
-assert calculate_discount_amount("750,40", "250,20", "Sjövalla FK 1 i 25manna", 25, True, 100, "Person") == 750
+assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, False, 40, "Person") == 0
+assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, True, 40, "Person") == 40
+assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, False, 100, "Person") == 0
+assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, True, 100, "Person") == 100
+assert calculate_discount_amount("120", "20", "Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 16, True, 100, "Person") == 120
+assert calculate_discount_amount("120", "20", "Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 25, True, 100, "Person") == 120
+assert calculate_discount_amount("150", "50", "En tävling", "Single", 16, True, 40, "Person") == 40
+assert calculate_discount_amount("150", "50", "En stafett-tävling", "Stafett", 16, True, 100, "Person") == 150
+assert calculate_discount_amount("150", "50", "En tävling", "Single", 25, True, 40, "Person") == 40
+assert calculate_discount_amount("150", "50", "En stafett-tävling", "Stafett", 25, True, 100, "Person") == 150
+assert calculate_discount_amount("750,40", "250,20", "Sjövalla FK 1 i 25manna", "Stafett", 25, True, 100, "Person") == 750
+assert calculate_discount_amount("100", "100", "En tävling", "Single", 25, True, 40, "Person") == 40
 
 # 2022-12-13 'amount' and 'fee' is in very few cases different, but seems like we can ignore 'fee'
 def calculate_amount_to_pay(amount, late_fee, competition:str, age, valid:bool, discount, person, discount_amount, adjustment) -> int:
@@ -315,7 +296,6 @@ def calculate_amount_to_pay(amount, late_fee, competition:str, age, valid:bool, 
         return adjustment
 
     return amount - discount_amount + adjustment
-    #return amount - calculate_discount_amount(amount, late_fee, competition, age, valid, discount, person) + adjustment
 
 # def calculate_amount_to_pay(amount, late_fee, competition:str, age, valid:bool, discount, person, discount_amount, adjustment) -> int:
 assert calculate_amount_to_pay(130, 30, "En tävling", 16, False, 40, "Person", 0, 0) == 130
@@ -514,19 +494,15 @@ def create_discount(competition:str,  competition_type:str, age) -> int:
         # Regler för subventioner - 2023
 
         # Relays give 100% discount
-        if re.search(r'stafett', competition_type, re.IGNORECASE) != None:
+        if is_relay(competition_type):
             return 100
 
-        # O-Ringen - not paid using Eventor
-        if re.search(r"^o-ringen", competition, re.IGNORECASE) != None:
+        # 100% when payed cash
+        if paid_cash(competition):
             return 100
 
         # Members of age <= 16 get 100% discount for "Vårserie" and "Ungdomsnatt"
         if age <= 16 and re.search(r"vårserie|ungdomsnatt", competition, re.IGNORECASE) != None:
-            return 100
-
-        # Usually payed cash
-        if re.search(r"veteran|skogsflicks", competition, re.IGNORECASE) != None:
             return 100
 
         # Standard discount
@@ -536,11 +512,11 @@ def create_discount(competition:str,  competition_type:str, age) -> int:
         # Tidigare regler för subventioner
 
         # Relays give 100% discount
-        if re.search(r'stafett', competition_type, re.IGNORECASE) != None:
+        if is_relay(competition_type):
             return 100
 
-        # O-Ringen - not paid using Eventor
-        if re.search(r"^o-ringen", competition, re.IGNORECASE) != None:
+        # 100% when payed cash
+        if paid_cash(competition):
             return 100
 
         # Members of age < 21 get 100% discount for "Vårserie" and "DM"
@@ -553,10 +529,6 @@ def create_discount(competition:str,  competition_type:str, age) -> int:
 
         # SM events give 100% discount
         if re.search(r"sm, |sm sprint", competition, re.IGNORECASE) != None:
-            return 100
-
-        # Usually payed cash
-        if re.search(r"veteran|skogsflicks", competition, re.IGNORECASE) != None:
             return 100
 
         # Standard discount
@@ -586,7 +558,7 @@ assert create_discount("Veteran-OL Göteborg", "", 50) == 100
 assert create_discount("Skogsflicksmatch", "", 50) == 100
 
 def create_discounts(df):
-    dfDiscounts = df.drop_duplicates(subset='Tävling')
+    dfDiscounts = df.drop_duplicates(subset=['Tävling', 'Datum'], keep='first')
     dfDiscounts = dfDiscounts[['Datum', 'Tävling', 'EventTyp']]
     dfDiscounts = dfDiscounts.dropna()
     dfDiscounts['Barn'] = np.vectorize(create_discount)(dfDiscounts['Tävling'], dfDiscounts['EventTyp'], 10)
@@ -646,6 +618,10 @@ def main():
     except FileExistsError:
         pass
 
+    # Remove O-Ringen
+    dfInvoices = dfInvoices.fillna("")
+    dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains('O-Ringen')]
+
     dfInvoices['Ålder'] = dfInvoices.apply(lambda row: get_age(row['Födelsedatum'], row['Datum']), axis=1)
     dfInvoices['Tjänst'] = dfInvoices.apply(lambda row: translate_to_swe(row['Tjänst']), axis=1)
 
@@ -687,7 +663,7 @@ def main():
                 break
 
     # Kontrollera om subvention skall ges
-    dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status']), axis=1)
+    dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status'], row['Tävling'], row['EventTyp']), axis=1)
 
     dfInvoices['Justering'] = 0
     dfInvoices['Notering'] = " "
@@ -699,7 +675,7 @@ def main():
 
     # Beräkna subventioner utifrån tävling, ålder och avgifter
     dfInvoices['Subvention %'] = np.vectorize(calculate_discount)(dfInvoices['OK'],dfInvoices['Tävling'],dfInvoices['Ålder'])
-    dfInvoices['Subvention'] = np.vectorize(calculate_discount_amount)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'])
+    dfInvoices['Subvention'] = np.vectorize(calculate_discount_amount)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'])
     dfInvoices['Att betala'] = np.vectorize(calculate_amount_to_pay)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'],dfInvoices['Subvention'], dfInvoices['Justering'])
 
     # Slå ihop för- och efternamn till en column
