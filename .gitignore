@@ -28,3 +28,6 @@ container/**
 *.xls
 *.xlsx
 *.pdf
+
+# Template file
+!Tjänster.xlsx

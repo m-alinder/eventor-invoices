@@ -618,10 +618,21 @@ def main():
     except FileExistsError:
         pass
 
+    # Add additional services
+    servicefile = "Tjänster.xlsx"
+    print("Läser in tjänster från: " + servicefile)
+    try:
+        dfServices = pd.read_excel(servicefile, 'Tjänster', skiprows=0)
+        dfInvoices = pd.concat([dfInvoices, dfServices], ignore_index=True)
+        dfInvoices = dfInvoices.sort_values(by=['Efternamn', 'Förnamn', 'Person-id', 'Datum'])
+    except:
+        print("Inga extra tjänster tillgängliga.")
+
     # Remove O-Ringen
     dfInvoices = dfInvoices.fillna("")
     dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains('O-Ringen')]
 
+    # Setup 
     dfInvoices['Ålder'] = dfInvoices.apply(lambda row: get_age(row['Födelsedatum'], row['Datum']), axis=1)
     dfInvoices['Tjänst'] = dfInvoices.apply(lambda row: translate_to_swe(row['Tjänst']), axis=1)
 
