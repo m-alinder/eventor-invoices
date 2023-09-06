@@ -9,7 +9,7 @@ from time import strftime
 """Create PDF files for all members
 
 Usage:
-python3 create_pdfs.py files/Fakturor_2022_v3_paw.xlsx files/pdfs_v3_paw/
+python3 create_pdfs_from_xlsx.py files/Fakturor_2022_v3_paw.xlsx files/pdfs_v3_paw/ namn telefon email
 
 """
 
@@ -20,6 +20,9 @@ time.tzset()
 parser = argparse.ArgumentParser()
 parser.add_argument("input_file", type=str, help="File with calculated invoice data")
 parser.add_argument("export_directory", type=str, help="Directory to save result to")
+parser.add_argument("info_name", type=str, help="Contact name on pdf")
+parser.add_argument("info_phone", type=str, help="Contact phone on pdf")
+parser.add_argument("info_email", type=str, help="Contact e-mail on pdf")
 args = parser.parse_args()
 
 def shorten_text(text:str):
@@ -91,7 +94,7 @@ idx = 0
 for invoice in data:
     idx += 1
     if idx < 10000:
-        inv = SFKInvoice(args.export_directory, data=invoice)
+        inv = SFKInvoice(args.export_directory, data=invoice, name=args.info_name, phone=args.info_phone, email=args.info_email)
         #print(invoice["invoice_no"], invoice["name"], invoice["total_amount"])
         
 print ("Tidsåtgång: " + str(round((time.time() - start_time),1)) + " s")

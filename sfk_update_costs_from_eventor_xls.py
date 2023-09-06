@@ -215,8 +215,12 @@ def normalize_fee(late_fee):
 assert normalize_fee("250,20") == 250
 assert normalize_fee("25") == 25
 
-def calculate_discount(valid:bool, competition:str, age) -> int:
+def calculate_discount(valid:bool, competition:str, competition_type:str, age) -> int:
     """Calculate discount in precentage"""
+
+    # 100% discount for relay or paid with cash
+    if (paid_cash(competition) or is_relay(competition_type)):
+        return 100
 
     # Not valid entries give 0% discount (did not start, card rental)
     if not valid: 
@@ -233,8 +237,8 @@ def calculate_discount(valid:bool, competition:str, age) -> int:
         return 40
 
 
-assert calculate_discount(False, "", 10) == 0
-assert calculate_discount(False, "", 40) == 0
+assert calculate_discount(False, "", "", 10) == 0
+assert calculate_discount(False, "", "", 40) == 0
 
 def calculate_discount_amount(amount, lateFee, competition:str, competition_type:str, age, valid, discount, person):
     """Calculate only discounted amount
@@ -292,8 +296,8 @@ def calculate_amount_to_pay(amount, late_fee, competition:str, age, valid:bool, 
     if not valid:
         return amount + adjustment
 
-    if discount == 100:
-        return adjustment
+    # if discount == 100:
+    #     return adjustment
 
     return amount - discount_amount + adjustment
 
@@ -303,17 +307,17 @@ assert calculate_amount_to_pay(100, 0,  "En tävling", 16, False, 40, "Person", 
 assert calculate_amount_to_pay(50,   50, "En tävling", 16, False, 100, "Person", 0, 0) == 50
 assert calculate_amount_to_pay(100, 0,  "En tävling", 16, True, 40, "Person", 40, 0) == 60
 assert calculate_amount_to_pay(150, 50, "En tävling", 16, True, 40, "Person", 40, 0) == 110
-assert calculate_amount_to_pay(100, 0,  "En tävling", 16, True, 100, "Person", 0, 0) == 0
-assert calculate_amount_to_pay(150, 50, "En tävling", 16, True, 100, "Person", 100, 0) == 0
-assert calculate_amount_to_pay(100, 0,  "En stafett-tävling", 16, True, 100, "Person", 0, 0) == 0
-assert calculate_amount_to_pay(100, 50, "En stafett-tävling", 16, True, 100, "Person", 0, 0) == 0
-assert calculate_amount_to_pay(100, 0,  "En stafett-tävling", 25, True, 100, "Person", 0, 0) == 0
-assert calculate_amount_to_pay(100, 50, "En stafett-tävling", 25, True, 100, "Person", 0, 0) == 0
-assert calculate_amount_to_pay(500.40, 250.20, "Sjövalla FK 1 i 25manna", 25, True, 100, "Person", 0, 0) == 0
+assert calculate_amount_to_pay(100, 0,  "En tävling", 16, True, 100, "Person", 100, 0) == 0
+assert calculate_amount_to_pay(150, 50, "En tävling", 16, True, 100, "Person", 100, 0) == 50
+assert calculate_amount_to_pay(100, 0,  "En stafett-tävling", 16, True, 100, "Person", 100, 0) == 0
+assert calculate_amount_to_pay(100, 50, "En stafett-tävling", 16, True, 100, "Person", 100, 0) == 0
+assert calculate_amount_to_pay(100, 0,  "En stafett-tävling", 25, True, 100, "Person", 100, 0) == 0
+assert calculate_amount_to_pay(100, 50, "En stafett-tävling", 25, True, 100, "Person", 100, 0) == 0
+assert calculate_amount_to_pay(500.40, 250.20, "Sjövalla FK 1 i 25manna", 25, True, 100, "Person", 500, 0) == 0
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering +123 kr", 16, False, 40, "Person", 0, 123) == 223
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering -80 kr", 16, False, 40, "Person", 0, -80) == 20
 
-def save_excel(df:pd.DataFrame, invoiceData, filename:str):
+def save_excel(df:pd.DataFrame, dfRemoved:pd.DataFrame, invoiceData, filename:str):
 
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
 
@@ -483,6 +487,13 @@ def save_excel(df:pd.DataFrame, invoiceData, filename:str):
     worksheet.protect('',protect_options)
     worksheet2.protect('',protect_options)
 
+
+    if dfRemoved is not None:
+        dfRemoved.to_excel(writer, sheet_name='Raderade Tävlingar', index=False)
+        worksheet3 = writer.sheets['Raderade Tävlingar']
+        worksheet3.set_column(0,  0, 25)
+        worksheet3.set_column(1,  1, 50)
+
     # Close the Pandas Excel writer and output the Excel file.
     #writer.save()
     writer.close()
@@ -618,6 +629,13 @@ def main():
     except FileExistsError:
         pass
 
+    # Beräkna start och slutdatum för tävlingarna i listan
+    startDate = dfInvoices['Datum'].min().strftime('%Y-%m-%d')
+    endDate = dfInvoices['Datum'].max() + pd.DateOffset(days=1)
+    endDate = endDate.strftime('%Y-%m-%d')
+
+    dfClubInfo = get_club_info(apikey, clubid, startDate, endDate)
+
     # Add additional services
     servicefile = "Tjänster.xlsx"
     print("Läser in tjänster från: " + servicefile)
@@ -632,6 +650,17 @@ def main():
     dfInvoices = dfInvoices.fillna("")
     dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains('O-Ringen')]
 
+    # Remove entries if discounts contains an x
+    dfRemoved = None
+    if dfDiscounts is not None:
+        dfRemoved = pd.DataFrame(columns = ['Datum', 'Tävling'])
+
+        for row in dfDiscounts.itertuples():
+            if (str(row.Barn).lower() == 'x' or str(row.Vuxen).lower() == 'x'):
+                print("Tar bort tävling: " + row.Tävling)
+                dfRemoved = pd.concat([dfRemoved, pd.DataFrame([[row.Datum, row.Tävling]], columns=['Datum', 'Tävling'])], ignore_index=True)
+                dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains(row.Tävling)]
+
     # Setup 
     dfInvoices['Ålder'] = dfInvoices.apply(lambda row: get_age(row['Födelsedatum'], row['Datum']), axis=1)
     dfInvoices['Tjänst'] = dfInvoices.apply(lambda row: translate_to_swe(row['Tjänst']), axis=1)
@@ -642,13 +671,6 @@ def main():
         dfInvoices['Status'] = dfInvoices["Tjänst"].map(lambda x: r"Tjänst" if pd.notna(x) else r"")
     if 'E-mail' not in dfInvoices.columns:
         dfInvoices['E-mail'] = ""
-
-    # Beräkna start och slutdatum för tävlingarna i listan
-    startDate = dfInvoices['Datum'].min().strftime('%Y-%m-%d')
-    endDate = dfInvoices['Datum'].max() + pd.DateOffset(days=1)
-    endDate = endDate.strftime('%Y-%m-%d')
-
-    dfClubInfo = get_club_info(apikey, clubid, startDate, endDate)
 
     dfInvoices.columns = dfInvoices.columns.str.replace('-', '_')
 
@@ -685,7 +707,7 @@ def main():
         save_discounts_xlsx(dfDiscounts, discountfile)
 
     # Beräkna subventioner utifrån tävling, ålder och avgifter
-    dfInvoices['Subvention %'] = np.vectorize(calculate_discount)(dfInvoices['OK'],dfInvoices['Tävling'],dfInvoices['Ålder'])
+    dfInvoices['Subvention %'] = np.vectorize(calculate_discount)(dfInvoices['OK'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'])
     dfInvoices['Subvention'] = np.vectorize(calculate_discount_amount)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'])
     dfInvoices['Att betala'] = np.vectorize(calculate_amount_to_pay)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'],dfInvoices['Subvention'], dfInvoices['Justering'])
 
@@ -724,7 +746,7 @@ def main():
     # Spara resultatet
     utfil = filnamn.rsplit('.', 1)[0] + ' - result.xlsx'
     print("Sparar beräknade resultat till: " + utfil)
-    save_excel(dfInvoices, invoices_data, utfil)
+    save_excel(dfInvoices, dfRemoved, invoices_data, utfil)
 
 if __name__=="__main__":
     main()

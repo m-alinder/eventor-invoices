@@ -7,48 +7,24 @@
 Sparad som: files/members_sjovalla_fk_2023_converted.xls
 
 - Skapa fakturaperiod i Eventor till exempel mellan 1/1-1/8 (Eventor tar inte med sista dagen, dvs 31/7 effektivt). Id för denna fakturaperiod: 1103
-- Logga in på ol-molnet och kör:
-```bash
-node download_invoices.js -b 1103 -t >> period_1_2023_1103.txt
-# Detta skript kan eventuellt rensas en del
-``` 
 
-- Ladda hem filerna:
-```bash
-# <somepath_x> ska bytas ut mot verklig path
-scp molnet:"/<somepath_1>/eventor-invoices/period_1_2023_*" /<somepath_2>/eventor-invoices/files
-``` 
+- Exporetera fakturorna till excel genom att välja redigera och sedan "Exportera till Excel" (Exporten kan ta lite tid).
 
-- Verifiera filerna:
-```bash
-grep batchId files/period_1_2023_1103.txt | wc -l # Ska vara 197
-``` 
+- Kör skriptet för att generera fakturaunderlag: *python3 sfk_update_costs_from_eventor_xls.py \<api-key> \<clubid> \<fakturafil.xls>*
 
-- Skapa anpassad fil processning:
-```bash
-grep batchId files/period_1_2023_1103.txt >> files/period_1_2023_1103_for_py.txt
-```
+- Skriptet hämtar tävlingsinformation från eventor och skapar två filer:
+1. "fakturafil - discounts.xlsx"
+1. "fakturafil - result.xlsx"
 
-- Kör pythonskript för att skapa Excel:
-```bash
-source .venv/bin/activate 
-# Bara en gång
-# python -m pip install -r requirements.txt
-# python -m pip install --upgrade pip
-python parse_data_files.py files/period_1_2023_1103_for_py.txt files/members_sjovalla_fk_2023_converted.xls files/2023-08-15_Fakturor_Period_1_2023.xlsx
-```
+- Vill man justera subventionerna så updatera "fakturafil - discounts.xlsx" och kör skriptet igen.
 
-- Output blev:
-```bash
-2023-08-15_Fakturor_Period_1_2023.xlsx
-2023-08-15_Fakturor_Period_1_2023_Aktiviteter_2023-08-15.json.tar.gz
-2023-08-15_Fakturor_Period_1_2023_Fakturor_2023-08-15.json.tar.gz
-```
-
-- Skapat en kopia som jag laddat upp och skickat länk till Ordförande ```2023-08-15_Fakturor_Period_1_2023_v1.xlsx```
+- Vill man lägga till manuella poster så kan man göra detta i filen "Tjänster.xlsx" och kör scriptet igen.
 
 ## Gå igenom avgifter
+Kontrollera resultatfilen.
 
 ## Generera fakturor
+
+Kör scriptet: *python3 sfk_create_pdfs_from_xlsx.py "fakturafil - result.xlsx" fakturor/ "Förnamn Efternam" telefonnummer email@olklubb.se*
 
 ## Skicka ut fakturor

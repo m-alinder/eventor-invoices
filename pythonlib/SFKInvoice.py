@@ -33,10 +33,10 @@ python create_pdf.py 123
 width, height = A4
 today = date.today()
 
-pdfmetrics.registerFont(TTFont('arimo', 'files/fonts/Arimo-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('arimo-bold', 'files/fonts/Arimo-Bold.ttf'))
-pdfmetrics.registerFont(TTFont('martel', 'files/fonts/MartelSans-Regular.ttf'))
-pdfmetrics.registerFont(TTFont('martel-bold', 'files/fonts/MartelSans-Bold.ttf'))
+pdfmetrics.registerFont(TTFont('arimo', 'static_files/fonts/Arimo-Regular.ttf'))
+pdfmetrics.registerFont(TTFont('arimo-bold', 'static_files/fonts/Arimo-Bold.ttf'))
+pdfmetrics.registerFont(TTFont('martel', 'static_files/fonts/MartelSans-Regular.ttf'))
+pdfmetrics.registerFont(TTFont('martel-bold', 'static_files/fonts/MartelSans-Bold.ttf'))
 
 #parser = argparse.ArgumentParser()
 #parser.add_argument("pdf_no")
@@ -58,16 +58,9 @@ sfk_lines = [
     '435 41 Mölnlycke',
     'Sverige'
 ]
-sfk_image = 'files/sfk_logo_small.png'
-sfk_text_image = 'files/sfk-ol-text.png'
-qr_image = 'files/qr_subventioner_invoice.png'
-sfk_contact = [
-    'Vid förfrågningar angående denna faktura, kontakta:',
-    '&nbsp;',
-    'Per-Arne Wahlgren',
-    'Telefon: 0708-322148',
-    'E-post: per-arne.wahlgren@telia.com'
-]
+sfk_image = 'static_files/sfk_logo_small.png'
+sfk_text_image = 'static_files/sfk-ol-text.png'
+qr_image = 'static_files/qr_subventioner_invoice.png'
 
 #style = getSampleStyleSheet()
 #normal = style["Normal"]
@@ -159,7 +152,20 @@ class SFKInvoice:
         else:
             self.data = {}
             self.filename = f"{export_dir}Faktura-exempel.pdf"
-        
+        if 'name' in kwargs:
+            self.name = kwargs['name']
+        else:
+            self.name = "John Doe"
+        if 'phone' in kwargs:
+            self.phone = kwargs['phone']
+        else:
+            self.phone = "555-1234"
+        if 'email' in kwargs:
+            self.email = kwargs['email']
+        else:
+            self.email = "john@doe.com"
+
+
         self.doc = SimpleDocTemplate(self.filename, pagesize=A4,
                                      topMargin = 1 * cm, bottomMargin = 2 * cm,
                                      leftMargin = 1 * cm, rightMargin = 1 * cm)
@@ -283,8 +289,8 @@ class SFKInvoice:
         totalt_pris = 0 # Pris + Efteranmälningsavgift
         for row in data["rows"]:
             #print(row)
-            items.append([row["id"], row["text"]])
-            items.append(['', '', '1', row["status"], str(row["amount"])+ " kr", str(row["late_fee"])+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]) + " kr"])
+            items.append(["Tjänst" if np.isnan(row["id"]) else f'{row["id"]:.0f}', row["text"]])
+            items.append(['', '', '1', row["status"], str(row["amount"])+ " kr", str("0.0" if np.isnan(row["late_fee"]) else row["late_fee"])+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]) + " kr"])
             #totalt_belopp += row["to_pay"]
             # Late fee included in amount
             #totalt_pris += row["amount"] + row["late_fee"]
@@ -379,6 +385,14 @@ class SFKInvoice:
         story.append(p)
 
         story.append(Spacer(1, 1*cm))
+
+        sfk_contact = [
+            'Vid förfrågningar angående denna faktura, kontakta:',
+            '&nbsp;',
+            self.name,
+            'Telefon: ' + self.phone,
+            'E-post: ' + self.email
+        ]
 
         for line in sfk_contact:
             p = Paragraph(line, style)
