@@ -32,6 +32,8 @@ python create_pdf.py 123
 
 width, height = A4
 today = date.today()
+# Betalningsvillkor i dagar
+betalningsvillkor = 30
 
 pdfmetrics.registerFont(TTFont('arimo', 'static_files/fonts/Arimo-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('arimo-bold', 'static_files/fonts/Arimo-Bold.ttf'))
@@ -54,7 +56,7 @@ title = 'Faktura'
 sfk_lines = [
     'Sjövalla FK',
     'Organisationsnummer: 852000-3305',
-    'Finnsjögården 12',
+    'Finnsjövägen 12',
     '435 41 Mölnlycke',
     'Sverige'
 ]
@@ -71,7 +73,7 @@ qr_image = 'static_files/qr_subventioner_invoice.png'
 def create_pdf_old(data:object):
     print("Creating PDF")
     invoice_date = today.isoformat()
-    due_date = (today + timedelta(days=30)).isoformat()
+    due_date = (today + timedelta(days=betalningsvillkor+1)).isoformat()
 
     invoice_info = [["Köp", data["name"]],
         ["Organisation", "Sjövalla FK"],
@@ -214,7 +216,7 @@ class SFKInvoice:
         canvas.drawString(390, 715, name)
 
         invoice_date = today.isoformat()
-        due_date = (today + timedelta(days=31)).isoformat()
+        due_date = (today + timedelta(days=betalningsvillkor+1)).isoformat()
         # print(f"Today: {invoice_date}. Due date: {due_date}") # Works
         canvas.drawString(40, 637, f"Fakturadatum: {invoice_date}")
 
@@ -223,7 +225,7 @@ class SFKInvoice:
             ["Organisation", "Sjövalla FK"],
             ["Bankgiro", "5617-2570"],
             ["Summa att betala", f"{str(data['total_amount'])} kr"],
-            ["Förfallodatum", due_date + " (30 dagar)"],
+            ["Förfallodatum", due_date + " (" + str(betalningsvillkor) + " dagar)"],
             ["Fakturanummer", str(data["invoice_no"])]]
         canvas.setFont("arimo-bold", 12)
         text = canvas.beginText(40, 615)
@@ -278,11 +280,6 @@ class SFKInvoice:
         story = [Spacer(1,10.5*cm)]
         style = styles["Normal"]
 
-        #invoice = data
-        #print(f"invoice data: {invoice}")
-        invoice_date = today.isoformat()
-        due_date = (today + timedelta(days=30)).isoformat()
-
         #print(data["rows"])
         items = [['Id', 'Benämning', 'Antal', 'Status', 'Pris', 'E.avg*', 'Subvention', 'Justering**', 'Belopp']]
         # TODO: Get from Excel instead?
@@ -290,7 +287,7 @@ class SFKInvoice:
         for row in data["rows"]:
             #print(row)
             items.append(["Tjänst" if np.isnan(row["id"]) else f'{row["id"]:.0f}', row["text"]])
-            items.append(['', '', '1', row["status"], str(row["amount"])+ " kr", str("0.0" if np.isnan(row["late_fee"]) else row["late_fee"])+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]) + " kr"])
+            items.append(['', '', '1', row["status"], f'{row["amount"]:.0f}'+ " kr", str("0" if np.isnan(row["late_fee"]) else f'{row["late_fee"]:.0f}')+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]+row["adjustment"]) + " kr"])
             #totalt_belopp += row["to_pay"]
             # Late fee included in amount
             #totalt_pris += row["amount"] + row["late_fee"]
@@ -379,7 +376,7 @@ class SFKInvoice:
             fontName='arimo',
             fontSize=10,
         )
-        p = Paragraph(f"Var god betala var faktura för sig. Märk aktuell faktura med text: {data['invoice_no']} {data['name']}", style)
+        p = Paragraph(f"Var god betala var faktura för sig. Märk aktuell faktura med text: \"{data['invoice_no']} {data['name']}\"", style)
         story.append(p)
         p = Paragraph(f"Tack för hjälpen!", style)
         story.append(p)
@@ -390,9 +387,11 @@ class SFKInvoice:
             'Vid förfrågningar angående denna faktura, kontakta:',
             '&nbsp;',
             self.name,
-            'Telefon: ' + self.phone,
-            'E-post: ' + self.email
         ]
+        if self.phone:
+            sfk_contact.append('Telefon: ' + self.phone)
+        if self.email:
+            sfk_contact.append('E-post: ' + self.email)
 
         for line in sfk_contact:
             p = Paragraph(line, style)

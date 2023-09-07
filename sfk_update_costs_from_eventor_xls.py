@@ -230,11 +230,12 @@ def calculate_discount(valid:bool, competition:str, competition_type:str, age) -
     if age <= 16:
         column = "Barn"
 
-    try:
-        return dfDiscounts.loc[dfDiscounts['Tävling'] == competition][column][0]
-    except:
-        # Standard discount
-        return 40
+    for row in dfDiscounts.itertuples():
+        if row.Tävling == competition:
+            return dfDiscounts.at[row.Index, column]
+
+    #print("Standardsubvention för: " + competition)
+    return 40
 
 
 assert calculate_discount(False, "", "", 10) == 0
