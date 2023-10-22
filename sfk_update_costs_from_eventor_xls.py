@@ -72,23 +72,24 @@ def parse_person_results_xml(xml_file):
                     
                 elif (eventType == "IndMultiDay"):
                     for classResult in resultlist.findall("ClassResult"):
-                        eventClass = classResult.find("EventClass").find("Name").text
-                        familyName = classResult.find("PersonResult").find("Person").find("PersonName").find("Family").text
-                        givenName = classResult.find("PersonResult").find("Person").find("PersonName").find("Given").text
-                        status = classResult.find("PersonResult").find("RaceResult").find("Result").find("CompetitorStatus").attrib.get("value")
-                        res.append(eventClass)
-                        res.append(familyName)
-                        res.append(givenName)
-                        res.append(status)
+                        for personResult in classResult.findall("PersonResult"):
+                            eventClass = classResult.find("EventClass").find("Name").text
+                            familyName = personResult.find("Person").find("PersonName").find("Family").text
+                            givenName = personResult.find("Person").find("PersonName").find("Given").text
+                            status = personResult.find("RaceResult").find("Result").find("CompetitorStatus").attrib.get("value")
+                            res.append(eventClass)
+                            res.append(familyName)
+                            res.append(givenName)
+                            res.append(status)
 
-                        rows.append({df_cols[i]: res[i] 
-                            for i, _ in enumerate(df_cols)})
-                        
-                        res = []
-                        res.append(eventType)
-                        res.append(eventId)
-                        res.append(eventName)
-                        res.append(eventDate)
+                            rows.append({df_cols[i]: res[i] 
+                                for i, _ in enumerate(df_cols)})
+                            
+                            res = []
+                            res.append(eventType)
+                            res.append(eventId)
+                            res.append(eventName)
+                            res.append(eventDate)
             except:
                 print("Unknown structure: " + eventType + ", " + eventId + ', ' + eventName)
         
@@ -690,11 +691,22 @@ def main():
                 print("No email available for " + row.Förnamn + " " + row.Efternamn + " (" + str(personId) + ")")
 
         dfInvoices.at[row.Index, 'E-mail'] = email
-        for result in dfPersonStatus.itertuples():
-            if row.Tävling == result.Name and row.Klass == result.Class:
-                dfInvoices.at[row.Index, 'EventTyp'] = translate_to_swe(result.Type)
-                dfInvoices.at[row.Index, 'Status'] = translate_to_swe(result.CompetitorStatus)
-                break
+
+        if (len(row.Tävling) > 0):
+            resultFound = False
+            for result in dfPersonStatus.itertuples():
+                if row.Tävling == result.Name and row.Klass == result.Class:
+                    dfInvoices.at[row.Index, 'EventTyp'] = translate_to_swe(result.Type)
+                    dfInvoices.at[row.Index, 'Status'] = translate_to_swe(result.CompetitorStatus)
+
+                    # Remove used entry to handle multi events with same name as we otherwise would
+                    # match first entry again.
+                    dfPersonStatus.drop(result.Index, inplace=True)
+                    resultFound = True
+                    break
+
+            if (not resultFound):
+                print(row.Tävling + ", " + row.Klass + " saknar resultat")
 
     # Kontrollera om subvention skall ges
     dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status'], row['Tävling'], row['EventTyp']), axis=1)
