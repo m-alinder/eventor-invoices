@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import sys
@@ -184,6 +185,10 @@ def get_age(birthDate,eventDate):
     return eventDate.year - birthDate.year
 
 def paid_cash(competition:str):
+    # Veteran SM is not paid cash
+    if re.search(r"veteran.sm", competition, re.IGNORECASE) != None:
+        return False
+
     # Usually paid cash
     return re.search(r"veteran|skogsflicks|motionsorientering", competition, re.IGNORECASE) != None
 
@@ -596,25 +601,35 @@ def save_discounts_xlsx(df:pd.DataFrame, filename:str):
     writer.close()
 
 
-def main(): 
-    if len(sys.argv) <= 3:
-        print(sys.argv[0] + ' <apikey> <clubid> <invoicefile.xls>')
-        exit()
+def main():
 
-    apikey = sys.argv[1]
-    clubid = sys.argv[2]
-    filnamn = sys.argv[3]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--infile', required=True, action='append', type=str, help='Input file name')
+    parser.add_argument('-a', '--apikey', required=True, type=str, help='Api key for Eventor')
+    parser.add_argument('-c', '--clubid', required=True, type=str, help='Club id')
+    parser.add_argument('-o', '--outfile', type=str, help='File to store the results')
+    parser.add_argument('-e', '--extras', type=str, help='Additional entries to add to the result file')
+    parser.add_argument('-d', '--discounts', type=str, help='Discounts file. Will be created if not exists')
+    args = parser.parse_args()
 
-    # Subventionsfil baserad på SFKs regler
-    discountfile = filnamn.rsplit('.', 1)[0] + ' - discounts.xlsx'
+    apikey = args.apikey
+    clubid = args.clubid
+
+    # Subventionsfil baserad på reglverket
+    if (args.discounts):
+        discountfile = args.discounts
+    else:
+        discountfile = args.infile[0].rsplit('.', 1)[0] + ' - discounts.xlsx'
 
     # Ladda fakturafilen som laddats hem från eventor
-    print("Öppnar filen: " + filnamn)
-    try:
-        dfInvoices = pd.read_excel(filnamn, 'Invoices', skiprows=1)
-    except:
-        print("Filen innehåller inte arket 'Invoices'.")
-        exit(-1)
+    dfInvoices = pd.DataFrame()
+    for filename in args.infile:
+        print("Laddar filen: " + filename)
+        try:
+            input = pd.read_excel(filename, 'Invoices', skiprows=1)
+            dfInvoices = pd.concat([dfInvoices, input],ignore_index=True)
+        except:
+            print("Filen innehåller inte arket 'Invoices'.")
 
     # Försök att ladda subventionsfilen om den finns, annars skapas den senare.
     print("Läser in subventioner från: " + discountfile)
@@ -637,16 +652,6 @@ def main():
     endDate = endDate.strftime('%Y-%m-%d')
 
     dfClubInfo = get_club_info(apikey, clubid, startDate, endDate)
-
-    # Add additional services
-    servicefile = "Tjänster.xlsx"
-    print("Läser in tjänster från: " + servicefile)
-    try:
-        dfServices = pd.read_excel(servicefile, 'Tjänster', skiprows=0)
-        dfInvoices = pd.concat([dfInvoices, dfServices], ignore_index=True)
-        dfInvoices = dfInvoices.sort_values(by=['Efternamn', 'Förnamn', 'Person-id', 'Datum'])
-    except:
-        print("Inga extra tjänster tillgängliga.")
 
     # Remove O-Ringen
     dfInvoices = dfInvoices.fillna("")
@@ -730,12 +735,25 @@ def main():
     # Radera överflödiga kolumner
     dfInvoices.drop(['Fakturanummer', 'Text', 'Förnamn','Efternamn', 'Födelsedatum', 'Valuta', 'Arrangörer'], axis=1, inplace=True)
 
-    #old_cols = dfInvoices.columns.values
     new_cols = ['Id', 'Person_id', 'E-mail', 'Person', 'Ålder', 'Datum', 'Tävling',
                 'Klass', 'Tjänst', 'EventTyp', 'Status', 'OK', 'Belopp', 'Efteranmälningsavgift',
                 'Subvention %', 'Subvention', 'Att betala', 'Justering', 'Notering']
     
     dfInvoices = dfInvoices.reindex(columns=new_cols)
+
+    if args.extras:
+        extrafile = args.extras
+        print("Läser in extraposter från: " + extrafile)
+        try:
+            extraData = pd.read_excel(extrafile, sheet_name=0)
+            dfInvoices = pd.concat([dfInvoices, extraData], ignore_index=True)
+        except:
+            print("Inga extra tjänster tillgängliga.")
+
+    # Sortera listan på efternamn, förnamn, ...
+    dfInvoices[['FirstName', 'LastName']] = dfInvoices['Person'].str.split(' ', n=1, expand=True)
+    dfInvoices = dfInvoices.sort_values(by=['LastName', 'FirstName', 'Person_id', 'Datum'])
+    dfInvoices.drop(['FirstName', 'LastName'], axis=1, inplace=True)
 
     # Group by person
     grp = dfInvoices[['Person','Subvention','Att betala', 'Justering']].groupby(["Person"])
@@ -757,7 +775,11 @@ def main():
             "email": dfInvoices.loc[dfInvoices['Person'] == name, ['E-mail']].values[0][0]}
 
     # Spara resultatet
-    utfil = filnamn.rsplit('.', 1)[0] + ' - result.xlsx'
+    if (args.outfile):
+        utfil = args.outfile
+    else:
+        utfil = args.infile[0].rsplit('.', 1)[0] + ' - result.xlsx'
+
     print("Sparar beräknade resultat till: " + utfil)
     save_excel(dfInvoices, dfRemoved, invoices_data, utfil)
 
