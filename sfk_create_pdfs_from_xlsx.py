@@ -69,7 +69,9 @@ for index, rows in g:
     for idx, row in rows.iterrows():
         #print(row["id"])
         if pd.isna(row["Tjänst"]):
-            text = str(row["Tävling"]) + " - " + str(row["Klass"])
+            text = str(row["Tävling"])
+            if not pd.isna(row["Klass"]):
+                text += " - " + str(row["Klass"])
         else:
             text = row["Tjänst"]
 
