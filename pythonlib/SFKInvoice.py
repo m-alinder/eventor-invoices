@@ -287,7 +287,7 @@ class SFKInvoice:
         for row in data["rows"]:
             #print(row)
             items.append(["Tjänst" if np.isnan(row["id"]) else f'{row["id"]:.0f}', row["text"]])
-            items.append(['', '', '1', row["status"], f'{row["amount"]:.0f}'+ " kr", str("0" if np.isnan(row["late_fee"]) else f'{row["late_fee"]:.0f}')+ " kr", "("+ str(row["%"]) + "%) " + str(row["discount"]) + " kr",str(row["adjustment"]) + " kr", str(row["to_pay"]+row["adjustment"]) + " kr"])
+            items.append(['', '', '1', row["status"], f'{row["amount"]:.0f}'+ " kr", str("0" if np.isnan(row["late_fee"]) else f'{row["late_fee"]:.0f}')+ " kr", "("+ str(int(row["%"])) + "%) " + str(int(row["discount"])) + " kr",str(int(row["adjustment"])) + " kr", str(int(row["to_pay"]+row["adjustment"])) + " kr"])
             #totalt_belopp += row["to_pay"]
             # Late fee included in amount
             #totalt_pris += row["amount"] + row["late_fee"]
@@ -351,11 +351,11 @@ class SFKInvoice:
         story.append(p)
         p = Paragraph(f"**) Eventuell manuell justering", style)
         story.append(p)
-        p = Paragraph(f"Summa pris: {totalt_pris} kr", style1)
+        p = Paragraph(f"Summa pris: {int(totalt_pris)} kr", style1)
         story.append(p)
-        p = Paragraph(f"Avdrag subventioner: {-data['total_discount']} kr", style1)
+        p = Paragraph(f"Avdrag subventioner: {-int(data['total_discount'])} kr", style1)
         story.append(p)
-        p = Paragraph(f"Justeringar: {data['total_adjustment']} kr", style1)
+        p = Paragraph(f"Justeringar: {int(data['total_adjustment'])} kr", style1)
         story.append(p)
         #print(f"Att betala '{data['total_amount']}' == pris '{totalt_pris}' - subv {data['total_discount']} + just. {data['total_adjustment']}]")
 
@@ -367,7 +367,7 @@ class SFKInvoice:
         story.append(Spacer(1, 0.5*cm))
         #style.rightIndent = 1*cm
         #style.fontSize = 12
-        p = Paragraph(f"Summa att betala: {data['total_amount']} kr", style2)
+        p = Paragraph(f"Summa att betala: {int(data['total_amount'])} kr", style2)
         story.append(p)
         story.append(Spacer(1, 0.5*cm))
 
