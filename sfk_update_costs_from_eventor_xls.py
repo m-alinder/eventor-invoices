@@ -610,6 +610,7 @@ def main():
     parser.add_argument('-o', '--outfile', type=str, help='File to store the results')
     parser.add_argument('-e', '--extras', type=str, help='Additional entries to add to the result file')
     parser.add_argument('-d', '--discounts', type=str, help='Discounts file. Will be created if not exists')
+    parser.add_argument('-n', '--number', type=int, default=1, help='Invoice start numbering')
     args = parser.parse_args()
 
     apikey = args.apikey
@@ -666,7 +667,7 @@ def main():
             if (str(row.Barn).lower() == 'x' or str(row.Vuxen).lower() == 'x'):
                 print("Tar bort tävling: " + row.Tävling)
                 dfRemoved = pd.concat([dfRemoved, pd.DataFrame([[row.Datum, row.Tävling]], columns=['Datum', 'Tävling'])], ignore_index=True)
-                dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains(row.Tävling)]
+                dfInvoices = dfInvoices[~(dfInvoices['Tävling'] == row.Tävling)]
 
     # Setup 
     dfInvoices['Ålder'] = dfInvoices.apply(lambda row: get_age(row['Födelsedatum'], row['Datum']), axis=1)
@@ -755,6 +756,9 @@ def main():
     dfInvoices = dfInvoices.sort_values(by=['LastName', 'FirstName', 'Person_id', 'Datum'])
     dfInvoices.drop(['FirstName', 'LastName'], axis=1, inplace=True)
 
+    # Ersätt alla "nan"
+    dfInvoices = dfInvoices.fillna("")
+
     # Group by person
     grp = dfInvoices[['Person','Subvention','Att betala', 'Justering']].groupby(["Person"])
 
@@ -769,8 +773,8 @@ def main():
     for idx, name in enumerate(dfInvoices["Person"].unique()):
         invoices_data[name] = {"name":name, "discount": subvention.loc[name], 
             "total_amount": att_betala.loc[name],
-            "invoiceNo": idx+1,
-            "invoiceName": f"Faktura-{idx+1}.pdf",
+            "invoiceNo": idx+args.number,
+            "invoiceName": f"Faktura-{idx+args.number}.pdf",
             "adjustment": justering.loc[name],
             "email": dfInvoices.loc[dfInvoices['Person'] == name, ['E-mail']].values[0][0]}
 
