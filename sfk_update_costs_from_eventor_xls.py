@@ -12,7 +12,13 @@ import xml.etree.ElementTree as et
 
 # declare global variables
 cache_dir = "eventor-cache/"
+
+# High service fee is above this value
+normal_service_amount = 50
+
+
 dfDiscounts = None
+dfLog = pd.DataFrame(columns = ['Aktivitet', 'Datum', 'Tävling'])
 
 def parse_person_results_xml(xml_file):
     df_cols = ["Type", "EventId", "Name", "Date", "Class", "Family", "Given", "CompetitorStatus"]
@@ -204,7 +210,7 @@ def check_ok(status, competition, competition_type):
         for row in dfDiscounts.itertuples():
             if row.Tävling == competition:
                 discount = dfDiscounts.at[row.Index, column]
-                if (discount is not 100):
+                if (discount != 100):
                     return not nok
 
     # Competitions payed cash
@@ -230,15 +236,17 @@ def normalize_fee(late_fee):
 assert normalize_fee("250,20") == 250
 assert normalize_fee("25") == 25
 
-def adjust_latefee(amount, lateFee, competition:str, name, clazz):
-    """Adjust invalid late fee"""
+def check_entry(amount, lateFee, date, competition:str, service:str, name, clazz):
+    """Check entry for invalid late fee and high service fee"""
+
+    if (service != "" and amount > normal_service_amount):
+        print(f"Hög avgift för tjänst: '{amount}' för {service} - {name}")
+        add_to_log("Hög avgift för tjänst", date, f"{amount}kr, för {service} - {name}")
 
     if (amount == lateFee):
         # Late fee amount not specified. Total amount is usually 150% of normal fee.
-        lateFee = round((amount / 3))
-        print(f"Beräknad efteranmälningsavgift: '{lateFee}' för {name}, {competition}, {clazz}")
-
-    return lateFee
+        print(f"Kontrollera efteranmälningsavgift: '{lateFee}' för {name}, {competition}, {clazz}")
+        add_to_log("Kontrollera efteranmälningsavgift", date, competition)
 
 
 def calculate_discount(valid:bool, competition:str, competition_type:str, age) -> int:
@@ -273,7 +281,7 @@ def calculate_discount_amount(amount, lateFee, competition:str, competition_type
     lateFee = normalize_fee(lateFee)
 
     # Relays with 100% discount shall ignore late fee
-    if is_relay(competition_type) and discount is 100:
+    if is_relay(competition_type) and discount == 100:
         return amount
 
     #print(f"[calculate_discount_amount] amount: '{amount}' latefee: '{lateFee}' '{competition}' age: '{age}' valid: '{valid}' d: '{discount}' p: '{person}'")
@@ -337,7 +345,7 @@ assert calculate_amount_to_pay(500.40, 250.20, "Sjövalla FK 1 i 25manna", 25, T
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering +123 kr", 16, False, 40, "Person", 0, 123) == 223
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering -80 kr", 16, False, 40, "Person", 0, -80) == 20
 
-def save_excel(df:pd.DataFrame, dfRemoved:pd.DataFrame, invoiceData, filename:str):
+def save_excel(df:pd.DataFrame, dfLog:pd.DataFrame, invoiceData, filename:str):
 
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
 
@@ -508,11 +516,13 @@ def save_excel(df:pd.DataFrame, dfRemoved:pd.DataFrame, invoiceData, filename:st
     worksheet2.protect('',protect_options)
 
 
-    if dfRemoved is not None:
-        dfRemoved.to_excel(writer, sheet_name='Raderade Tävlingar', index=False)
-        worksheet3 = writer.sheets['Raderade Tävlingar']
-        worksheet3.set_column(0,  0, 25)
-        worksheet3.set_column(1,  1, 50)
+    if dfLog is not None:
+        dfLog.drop_duplicates(inplace=True)
+        dfLog.to_excel(writer, sheet_name='Logg', index=False)
+        worksheet3 = writer.sheets['Logg']
+        worksheet3.set_column(0,  0, 30)
+        worksheet3.set_column(1,  1, 25)
+        worksheet3.set_column(2,  2, 50)
 
     # Close the Pandas Excel writer and output the Excel file.
     #writer.save()
@@ -577,6 +587,9 @@ def save_discounts_xlsx(df:pd.DataFrame, filename:str):
     worksheet.set_column(2,  2, 12)
     writer.close()
 
+def add_to_log(activity, date, text):
+    global dfLog
+    dfLog = pd.concat([dfLog, pd.DataFrame([[activity, date, text]], columns=['Aktivitet', 'Datum', 'Tävling'])], ignore_index=True)
 
 def main():
 
@@ -636,14 +649,11 @@ def main():
     dfInvoices = dfInvoices[~dfInvoices['Tävling'].str.contains('O-Ringen')]
 
     # Remove entries if discounts contains an x
-    dfRemoved = None
     if dfDiscounts is not None:
-        dfRemoved = pd.DataFrame(columns = ['Datum', 'Tävling'])
-
         for row in dfDiscounts.itertuples():
             if (str(row.Barn).lower() == 'x' or str(row.Vuxen).lower() == 'x'):
                 print("Tar bort tävling: " + row.Tävling)
-                dfRemoved = pd.concat([dfRemoved, pd.DataFrame([[row.Datum, row.Tävling]], columns=['Datum', 'Tävling'])], ignore_index=True)
+                add_to_log('Borttagen tävling', row.Datum, row.Tävling)
                 dfInvoices = dfInvoices[~(dfInvoices['Tävling'] == row.Tävling)]
 
     # Setup 
@@ -672,6 +682,7 @@ def main():
             else:
                 email = ""
                 print("No email available for " + row.Förnamn + " " + row.Efternamn + " (" + str(personId) + ")")
+                add_to_log("E-mail saknas", "", f"{row.Förnamn} {row.Efternamn} ({str(personId)})")
 
         dfInvoices.at[row.Index, 'E-mail'] = email
 
@@ -690,6 +701,7 @@ def main():
 
             if (not resultFound):
                 print(row.Tävling + ", " + row.Klass + " saknar resultat")
+                add_to_log('Saknar resultat', row.Datum, f"{row.Tävling}, {row.Klass}")
 
     # Kontrollera om subvention skall ges
     dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status'], row['Tävling'], row['EventTyp']), axis=1)
@@ -702,8 +714,8 @@ def main():
         dfDiscounts = create_discounts(dfInvoices)
         save_discounts_xlsx(dfDiscounts, discountfile)
 
-    # Justera skumma efteranmälningsavgifter
-    dfInvoices['Efteranmälningsavgift'] = np.vectorize(adjust_latefee)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'], dfInvoices['Förnamn'] + ' ' + dfInvoices['Efternamn'], dfInvoices['Klass'])
+    # Kontrollera efteranmälningsavgifter
+    np.vectorize(check_entry)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'], dfInvoices['Datum'], dfInvoices['Tävling'], dfInvoices['Tjänst'], dfInvoices['Förnamn'] + ' ' + dfInvoices['Efternamn'], dfInvoices['Klass'])
 
     # Beräkna subventioner utifrån tävling, ålder och avgifter
     dfInvoices['Subvention %'] = np.vectorize(calculate_discount)(dfInvoices['OK'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'])
@@ -766,7 +778,7 @@ def main():
         utfil = args.infile[0].rsplit('.', 1)[0] + ' - result.xlsx'
 
     print("Sparar beräknade resultat till: " + utfil)
-    save_excel(dfInvoices, dfRemoved, invoices_data, utfil)
+    save_excel(dfInvoices, dfLog, invoices_data, utfil)
 
 if __name__=="__main__":
     main()
