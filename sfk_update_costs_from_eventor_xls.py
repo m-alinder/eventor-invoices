@@ -43,7 +43,7 @@ def parse_person_results_xml(xml_file):
                 res.append(eventName)
                 res.append(eventDate)
 
-                if (eventType == "IndSingleDay"):
+                if (eventType == "IndSingleDay" or eventType == "PatrolSingleDay"):
                     for classResult in resultlist.findall("ClassResult"):
                         eventClass = classResult.find("EventClass").find("Name").text
                         familyName = classResult.find("PersonResult").find("Person").find("PersonName").find("Family").text
@@ -207,11 +207,12 @@ def check_ok(status, competition, competition_type):
     if is_relay(competition_type):
         column = "Vuxen"
         discount = 40
-        for row in dfDiscounts.itertuples():
-            if row.Tävling == competition:
-                discount = dfDiscounts.at[row.Index, column]
-                if (discount != 100):
-                    return not nok
+        if dfDiscounts is not None:
+            for row in dfDiscounts.itertuples():
+                if row.Tävling == competition:
+                    discount = dfDiscounts.at[row.Index, column]
+                    if (discount != 100):
+                        return not nok
 
     # Competitions payed cash
     return not nok or paid_cash(competition)
@@ -523,6 +524,21 @@ def save_excel(df:pd.DataFrame, dfLog:pd.DataFrame, invoiceData, filename:str):
         worksheet3.set_column(0,  0, 30)
         worksheet3.set_column(1,  1, 25)
         worksheet3.set_column(2,  2, 50)
+
+    dfAmmount = df.drop(df[df.Klass == ""].index).groupby(['Datum', 'Tävling', 'Belopp']).size().reset_index(name='Person')
+    dfAmmount.to_excel(writer, sheet_name='Avgifter', index=False)
+    worksheet = writer.sheets['Avgifter']
+    worksheet.set_column(0,  0, 20)
+    worksheet.set_column(1,  1, 50)
+    worksheet.set_column(2,  2, 10)
+    worksheet.set_column(3,  3, 10)
+
+    dfService = df.drop(df[df.Tjänst == ""].index).groupby(['Tjänst', 'Belopp']).size().reset_index(name='Antal')
+    dfService.to_excel(writer, sheet_name='Tjänster', index=False)
+    worksheet = writer.sheets['Tjänster']
+    worksheet.set_column(0,  0, 50)
+    worksheet.set_column(1,  1, 10)
+    worksheet.set_column(2,  2, 10)
 
     # Close the Pandas Excel writer and output the Excel file.
     #writer.save()
