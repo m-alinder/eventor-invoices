@@ -51,6 +51,20 @@ Kontrollera att kostnader och subventioner i resultatfilen blivit korrekta. Even
 
 När allt ser bra ut i resultatfilens "aktivitetsöversikt" så kontrollera att kostnaderna under fliken "fakturaöversikt" är updaterade. Kör en manuell omräkning av värden.
 
+### Stöd för granskning av resultatfilen
+För att underlätta granskningen så finns ett skript som försöker extrahera nyttig information från klubbfakturor skickade från eventor.
+
+Skriptet söker igenom all fakturor i en given katalog och skapar en fakturasummering i ett exceldokument med flera blad:
+* Deltagare - Allt tävlingsdeltagande och tjänster
+* Tävlingar - Antal som deltagit på varje enskild tävling
+* Avgifter - Fakturerade avgifter för varje tävling
+* Tjänster - Fakturerade tjänster för tävlingar
+* Fel format - PDF:er som inte kunde analyserar och bör granskas manuellt.
+
+Kör scriptet:
+```
+python3 sfk_process_eventor_pdfs.py eventor-pdfs Tävlingsfakturor.xlsx
+```
 
 ## Generera fakturor
 Innan fakturorna genereras kontrollera att kostnaderna i "fakturaöverikten" är updaterade.

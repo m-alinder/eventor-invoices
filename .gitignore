@@ -28,6 +28,10 @@ container/**
 *.xls
 *.xlsx
 *.pdf
+*.pyc
+*.zip
+Faktur*
+
 
 # Template file
-!Tjänster.xlsx
+#!Tjänster.xlsx
