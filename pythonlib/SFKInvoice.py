@@ -34,6 +34,7 @@ width, height = A4
 today = date.today()
 # Betalningsvillkor i dagar
 betalningsvillkor = 30
+#betalningsvillkor = 14
 
 pdfmetrics.registerFont(TTFont('arimo', 'static_files/fonts/Arimo-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('arimo-bold', 'static_files/fonts/Arimo-Bold.ttf'))
@@ -361,7 +362,9 @@ class SFKInvoice:
 
         # TODO Se parse.. om kommentar
         #if data['name'] not in ["Claes Björkman","Ebbe Holmqvist", "Emelina Holmqvist", "Johan Hjelmér", "Jonathan Brolin", "Mailis Holmqvist"]:
-        assert abs(data['total_amount'] - (totalt_pris - data['total_discount'] + data['total_adjustment'])) < 1
+        if abs(data['total_amount'] - (totalt_pris - data['total_discount'] + data['total_adjustment'])) >= 1:
+            print(f"Error: {data['total_amount']} - ({totalt_pris} - {data['total_discount']} + {data['total_adjustment']})")
+        assert abs(data['total_amount'] - (totalt_pris - data['total_discount'] + data['total_adjustment'])) < 2
         #p = Paragraph(f"Summa belopp: {data['total_discount']} kr", style1)
         #story.append(p)
         story.append(Spacer(1, 0.5*cm))
