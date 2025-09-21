@@ -237,17 +237,26 @@ def normalize_fee(late_fee):
 assert normalize_fee("250,20") == 250
 assert normalize_fee("25") == 25
 
-def check_entry(amount, lateFee, date, competition:str, service:str, name, clazz):
+def check_entry(amount, lateFee, total, date, competition:str, service:str, name, clazz):
     """Check entry for invalid late fee and high service fee"""
 
-    if (service != "" and amount > normal_service_amount):
-        print(f"Hög avgift för tjänst: '{amount}' för {service} - {name}")
-        add_to_log("Hög avgift för tjänst", date, f"{amount}kr, för {service} - {name}")
+    if (service != ""):
+        if (total == 0):
+            print(f"Betalat på plats: {amount}kr för {service} - {name}")
+            add_to_log("Betalat på plats", date, f"{amount}kr för {service} - {name}")
+        elif (amount > normal_service_amount):
+            print(f"Hög avgift för tjänst: {amount}kr för {service} - {name}")
+            add_to_log("Hög avgift för tjänst", date, f"{amount}kr, för {service} - {name}")
+    else:
+        if (amount == lateFee and lateFee > 0):
+            # Late fee amount not specified. Total amount is usually 150% of normal fee.
+            print(f"Kontrollera efteranmälningsavgift: {lateFee}kr för {name}, {competition}, {clazz}")
+            add_to_log("Kontrollera efteranmälningsavgift", date, competition)
 
-    if (amount == lateFee):
-        # Late fee amount not specified. Total amount is usually 150% of normal fee.
-        print(f"Kontrollera efteranmälningsavgift: '{lateFee}' för {name}, {competition}, {clazz}")
-        add_to_log("Kontrollera efteranmälningsavgift", date, competition)
+        if (total == 0):
+            # Entry probably paid cash at the event.
+            print(f"Betalat på plats: {amount}kr för {name}, {competition}, {clazz}")
+            add_to_log("Betalat på plats", date, f"{amount}kr för {name}, {competition}, {clazz}")
 
 
 def calculate_discount(valid:bool, competition:str, competition_type:str, age) -> int:
@@ -272,7 +281,7 @@ def calculate_discount(valid:bool, competition:str, competition_type:str, age) -
 assert calculate_discount(False, "", "", 10) == 0
 assert calculate_discount(False, "", "", 40) == 0
 
-def calculate_discount_amount(amount, lateFee, competition:str, competition_type:str, age, valid, discount, klass):
+def calculate_discount_amount(amount, lateFee, total, competition:str, competition_type:str, age, valid, discount, klass):
     """Calculate only discounted amount
     
     In certain cases (e.g., relays) also lateFee might be in subject for discount
@@ -282,7 +291,8 @@ def calculate_discount_amount(amount, lateFee, competition:str, competition_type
     lateFee = normalize_fee(lateFee)
 
     # Relays with 100% discount shall ignore late fee
-    if is_relay(competition_type) and discount == 100:
+    # Paid cash at the event shall result in nothing to pay
+    if (is_relay(competition_type) and discount == 100) or total == 0:
         return amount
 
     #print(f"[calculate_discount_amount] amount: '{amount}' latefee: '{lateFee}' '{competition}' age: '{age}' valid: '{valid}' d: '{discount}' p: '{person}'")
@@ -296,19 +306,19 @@ def calculate_discount_amount(amount, lateFee, competition:str, competition_type
     return discount_amount
 
 # Amount is total fee to pay, lateFee already part of amount.
-assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, False, 40, "Person") == 0
-assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, True, 40, "Person") == 40
-assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, False, 100, "Person") == 0
-assert calculate_discount_amount("100", "0", "En tävling", "Single", 25, True, 100, "Person") == 100
+assert calculate_discount_amount("100", "0", "1", "En tävling", "Single", 25, False, 40, "Person") == 0
+assert calculate_discount_amount("100", "0", "1", "En tävling", "Single", 25, True, 40, "Person") == 40
+assert calculate_discount_amount("100", "0", "1", "En tävling", "Single", 25, False, 100, "Person") == 0
+assert calculate_discount_amount("100", "0", "1", "En tävling", "Single", 25, True, 100, "Person") == 100
 # Standard stafettsubvention är 100% även på efteranmälan.
-assert calculate_discount_amount("120", "20", "X-Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 16, True, 100, "Person") == 120
-assert calculate_discount_amount("120", "20", "X-Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 25, True, 100, "Person") == 120
-assert calculate_discount_amount("150", "50", "En tävling", "Single", 16, True, 40, "Person") == 40
-assert calculate_discount_amount("150", "50", "En stafett-tävling", "Stafett", 16, True, 100, "Person") == 150
-assert calculate_discount_amount("150", "50", "En tävling", "Single", 25, True, 40, "Person") == 40
-assert calculate_discount_amount("150", "50", "En stafett-tävling", "Stafett", 25, True, 40, "Person") == 40
-assert calculate_discount_amount("750,40", "250,20", "Sjövalla FK 1 i 25manna", "Stafett", 25, True, 100, "Person") == 750
-assert calculate_discount_amount("150", "150", "En tävling", "Single", 25, True, 40, "Person") == 0
+assert calculate_discount_amount("120", "20", "1", "X-Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 16, True, 100, "Person") == 120
+assert calculate_discount_amount("120", "20", "1", "X-Sjövalla FK 1 i DM, stafett, Göteborg + Västergötland", "Stafett", 25, True, 100, "Person") == 120
+assert calculate_discount_amount("150", "50", "1", "En tävling", "Single", 16, True, 40, "Person") == 40
+assert calculate_discount_amount("150", "50", "1", "En stafett-tävling", "Stafett", 16, True, 100, "Person") == 150
+assert calculate_discount_amount("150", "50", "1", "En tävling", "Single", 25, True, 40, "Person") == 40
+assert calculate_discount_amount("150", "50", "1", "En stafett-tävling", "Stafett", 25, True, 40, "Person") == 40
+assert calculate_discount_amount("750,40", "250,20", "1", "Sjövalla FK 1 i 25manna", "Stafett", 25, True, 100, "Person") == 750
+assert calculate_discount_amount("150", "150", "1", "En tävling", "Single", 25, True, 40, "Person") == 0
 
 # 2022-12-13 'amount' and 'fee' is in very few cases different, but seems like we can ignore 'fee'
 def calculate_amount_to_pay(amount, late_fee, competition:str, age, valid:bool, discount, person, discount_amount, adjustment) -> int:
@@ -716,8 +726,10 @@ def main():
                     break
 
             if (not resultFound):
-                print(row.Tävling + ", " + row.Klass + " saknar resultat")
-                add_to_log('Saknar resultat', row.Datum, f"{row.Tävling}, {row.Klass}")
+                # Result is missing, but still it is a competition. Set status to "OK" to give discount as default.
+                dfInvoices.at[row.Index, 'Status'] = "Okänd"
+                print(f"{row.Förnamn} {row.Efternamn}, {row.Tävling}, {row.Klass} saknar resultat")
+                add_to_log('Saknar resultat', row.Datum, f"{row.Förnamn} {row.Efternamn}, {row.Tävling}, {row.Klass}")
 
     # Kontrollera om subvention skall ges
     dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status'], row['Tävling'], row['EventTyp']), axis=1)
@@ -731,11 +743,11 @@ def main():
         save_discounts_xlsx(dfDiscounts, discountfile)
 
     # Kontrollera efteranmälningsavgifter
-    np.vectorize(check_entry)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'], dfInvoices['Datum'], dfInvoices['Tävling'], dfInvoices['Tjänst'], dfInvoices['Förnamn'] + ' ' + dfInvoices['Efternamn'], dfInvoices['Klass'])
+    np.vectorize(check_entry)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'], dfInvoices['Att betala'], dfInvoices['Datum'], dfInvoices['Tävling'], dfInvoices['Tjänst'], dfInvoices['Förnamn'] + ' ' + dfInvoices['Efternamn'], dfInvoices['Klass'])
 
     # Beräkna subventioner utifrån tävling, ålder och avgifter
     dfInvoices['Subvention %'] = np.vectorize(calculate_discount)(dfInvoices['OK'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'])
-    dfInvoices['Subvention'] = np.vectorize(calculate_discount_amount)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Klass'])
+    dfInvoices['Subvention'] = np.vectorize(calculate_discount_amount)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Att betala'],dfInvoices['Tävling'],dfInvoices['EventTyp'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Klass'])
     dfInvoices['Att betala'] = np.vectorize(calculate_amount_to_pay)(dfInvoices['Belopp'],dfInvoices['Efteranmälningsavgift'],dfInvoices['Tävling'],dfInvoices['Ålder'],dfInvoices['OK'],dfInvoices['Subvention %'],dfInvoices['Förnamn'],dfInvoices['Subvention'], dfInvoices['Justering'])
 
     # Slå ihop för- och efternamn till en column

@@ -17,8 +17,9 @@ invoice_x.pdf
 send_commands.sh
 log_invoices_*
 
-# Eventor Cache
+# Eventor Cache, m.m
 eventor-cache/
+eventor*/
 
 # python virtualenv
 env/**
@@ -27,11 +28,15 @@ container/**
 
 *.xls
 *.xlsx
+*.csv
 *.pdf
 *.pyc
 *.zip
 Faktur*
+faktur*
 
+# Backup folder
+backup/
 
 # Template file
 #!Tjänster.xlsx
