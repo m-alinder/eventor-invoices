@@ -75,7 +75,8 @@ for index, rows in g:
         else:
             text = row["Tjänst"]
 
-        r = {"id":row["Id"], 
+        r = {"id":row["Id"],
+            "datum":"" if pd.isna(row["Datum"]) else row["Datum"].strftime('%Y-%m-%d'), 
             "text": shorten_text(text), 
             "amount": row["Belopp"], 
             "late_fee": row["Efteranmälningsavgift"], 

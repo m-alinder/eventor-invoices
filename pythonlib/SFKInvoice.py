@@ -282,12 +282,12 @@ class SFKInvoice:
         style = styles["Normal"]
 
         #print(data["rows"])
-        items = [['Id', 'Benämning', 'Antal', 'Status', 'Pris', 'E.avg*', 'Subvention', 'Justering**', 'Belopp']]
+        items = [['Datum', 'Benämning', 'Antal', 'Status', 'Pris', 'E.avg*', 'Subvention', 'Justering**', 'Belopp']]
         # TODO: Get from Excel instead?
         totalt_pris = 0 # Pris + Efteranmälningsavgift
         for row in data["rows"]:
             #print(row)
-            items.append(["Tjänst" if np.isnan(row["id"]) else f'{row["id"]:.0f}', row["text"]])
+            items.append(["Tjänst" if np.isnan(row["id"]) else f'{row["datum"]}', row["text"]])
             items.append(['', '', '1', row["status"], f'{row["amount"]:.0f}'+ " kr", str("0" if np.isnan(row["late_fee"]) else f'{row["late_fee"]:.0f}')+ " kr", "("+ str(int(row["%"])) + "%) " + str(int(row["discount"])) + " kr",str(int(row["adjustment"])) + " kr", str(int(row["to_pay"]+row["adjustment"])) + " kr"])
             #totalt_belopp += row["to_pay"]
             # Late fee included in amount
@@ -348,7 +348,7 @@ class SFKInvoice:
         )
         #style.fontName = "arimo-bold"
         #style.alignment = TA_RIGHT
-        p = Paragraph(f"*) 'E.avg' = Efteranmälningsavgift", style)
+        p = Paragraph(f"*) 'E.avg' = Efteranmälningsavgift eller extra avgift utan subvention, tex mat", style)
         story.append(p)
         p = Paragraph(f"**) Eventuell manuell justering", style)
         story.append(p)
