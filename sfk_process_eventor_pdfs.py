@@ -124,19 +124,78 @@ def read_pdf_files_in_directory(directory, outfile):
     worksheet.set_column(2,  2, 30)
     worksheet.set_column(3,  4, 10)
 
+    # If result file was given. Add sheet with missing entries
+    if (args.result_file):
+        xls = pd.ExcelFile(args.result_file)
+        dfRes = pd.read_excel(xls, 'Aktivitetsöversikt')
+
+        dfEventorOnly = dfRes[['Datum', 'Person','Tävling']]
+        dfEventorOnly = dfEventorOnly.rename(columns={"Person": "Namn"})
+
+        dfRes = dfRes[['Person','Tävling', 'Belopp']]
+        dfRes = dfRes.rename(columns={"Person": "Namn", "Belopp": "Eventor"})
+        dfRes["Eventor"] = dfRes["Eventor"].astype(str).str.replace(',', '.')
+        dfRes["Eventor"] = pd.to_numeric(dfRes["Eventor"])
+        dfRes = dfRes.sort_values(['Namn', "Tävling"])
+
+        dfPdfs = df.sort_values(['Namn', "Tävling"])
+        dfPdfs = dfPdfs[dfPdfs['Tjänst'].str.len().lt(1)]
+        dfPdfs["Avgift"] = dfPdfs["Avgift"].astype(str).str.replace(',', '.')
+        dfPdfs["Avgift"] = pd.to_numeric(dfPdfs["Avgift"])
+
+        dfMissing = dfPdfs.merge(dfRes.drop_duplicates(), on=['Tävling', 'Namn'], 
+                    how='left', indicator=True)
+        
+        dfMissing['AvgiftOk'] = dfMissing['Avgift'] == dfMissing['Eventor']
+        #dfMissing = dfMissing[dfMissing['_merge'] == 'left_only']
+        dfMissing = dfMissing[dfMissing['AvgiftOk'] == False]
+        dfMissing = dfMissing.sort_values(['Datum'])
+        dfMissing.reset_index(drop=True, inplace=True)
+        dfMissing.drop(columns=['_merge', 'Tjänst', 'AvgiftOk'], inplace=True)
+
+        dfMissing.to_excel(writer, sheet_name='AvgifterAttGranska', index=False)
+
+        # Get the xlsxwriter workbook and worksheet objects.
+        #workbook  = writer.book
+        worksheet = writer.sheets['AvgifterAttGranska']
+        worksheet.set_column(0,  0, 12)
+        worksheet.set_column(1,  1, 50)
+        worksheet.set_column(2,  2, 30)
+        worksheet.set_column(3,  3, 15)
+        worksheet.set_column(4,  4, 15)
+        worksheet.set_column(5,  5, 15)
+
+        dfEventorOnly = dfEventorOnly.merge(dfPdfs.drop_duplicates(), on=['Tävling', 'Namn'], 
+                    how='left', indicator=True)
+        dfEventorOnly = dfEventorOnly[dfEventorOnly['_merge'] == 'left_only']
+        dfEventorOnly = dfEventorOnly.rename(columns={"Datum_x": "Datum"})
+        dfEventorOnly = dfEventorOnly[['Datum', 'Namn', 'Tävling']]
+        dfEventorOnly = dfEventorOnly.sort_values(['Datum'])
+        dfEventorOnly = dfEventorOnly[dfEventorOnly['Tävling'].str.len().gt(1)]
+
+        dfEventorOnly.to_excel(writer, sheet_name='BaraIEventor', index=False)
+
+        # Get the xlsxwriter workbook and worksheet objects.
+        #workbook  = writer.book
+        worksheet = writer.sheets['BaraIEventor']
+        worksheet.set_column(0,  0, 24)
+        worksheet.set_column(1,  1, 30)
+        worksheet.set_column(2,  2, 50)
+
+
     dfError.to_excel(writer, sheet_name='Fel Format', index=False)
     worksheet = writer.sheets['Fel Format']
     worksheet.set_column(0,  0, 60)
 
     # Close the Pandas Excel writer and output the Excel file.
     writer.close()
-
+    return df
 
 parser = argparse.ArgumentParser()
 parser.add_argument("input_directory", type=str, help="Directory with received eventor invoices")
 parser.add_argument("output_file", type=str, help="Xlsx file to save result to")
+parser.add_argument('-r', '--result-file', type=str, help='Result file to compare pdf content with')
 args = parser.parse_args()
 
-
 directory_path = "eventor-pdfs"  # Byt ut med din faktiska sökväg
-read_pdf_files_in_directory(args.input_directory, args.output_file)
+dfPdfs = read_pdf_files_in_directory(args.input_directory, args.output_file)
