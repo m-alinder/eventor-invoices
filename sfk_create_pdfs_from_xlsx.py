@@ -23,7 +23,10 @@ parser.add_argument("export_directory", type=str, help="Directory to save result
 parser.add_argument("info_name", type=str, help="Contact name on pdf")
 parser.add_argument("info_phone", type=str, help="Contact phone on pdf")
 parser.add_argument("info_email", type=str, help="Contact e-mail on pdf")
+parser.add_argument("due_days", type=int, help="Due days for invoice")
 args = parser.parse_args()
+
+os.makedirs(args.export_directory)
 
 def shorten_text(text:str):
     """Make short text is not too long"""
@@ -97,7 +100,7 @@ idx = 0
 for invoice in data:
     idx += 1
     if idx < 10000:
-        inv = SFKInvoice(args.export_directory, data=invoice, name=args.info_name, phone=args.info_phone, email=args.info_email)
+        inv = SFKInvoice(args.export_directory, data=invoice, name=args.info_name, phone=args.info_phone, email=args.info_email, due_days=args.due_days)
         #print(invoice["invoice_no"], invoice["name"], invoice["total_amount"])
         
 print ("Tidsåtgång: " + str(round((time.time() - start_time),1)) + " s")

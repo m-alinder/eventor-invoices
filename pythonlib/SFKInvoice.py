@@ -32,9 +32,6 @@ python create_pdf.py 123
 
 width, height = A4
 today = date.today()
-# Betalningsvillkor i dagar
-betalningsvillkor = 30
-#betalningsvillkor = 14
 
 pdfmetrics.registerFont(TTFont('arimo', 'static_files/fonts/Arimo-Regular.ttf'))
 pdfmetrics.registerFont(TTFont('arimo-bold', 'static_files/fonts/Arimo-Bold.ttf'))
@@ -70,19 +67,6 @@ qr_image = 'static_files/qr_subventioner_invoice.png'
 #normal.alignment = TA_CENTER
 #normal.fontName = "Helvetica"
 #normal.fontSize = 15
-
-def create_pdf_old(data:object):
-    print("Creating PDF")
-    invoice_date = today.isoformat()
-    due_date = (today + timedelta(days=betalningsvillkor+1)).isoformat()
-
-    invoice_info = [["Köp", data["name"]],
-        ["Organisation", "Sjövalla FK"],
-        ["Bankgiro", "5617-2570"],
-        ["Summa att betala", data["total_amount"]],
-        ["Förfallodatum", due_date],
-        ["Fakturanummer", "123"]]
-    return ""
 
 #PAGE_HEIGHT=defaultPageSize[1]; PAGE_WIDTH=defaultPageSize[0]
 styles = getSampleStyleSheet()
@@ -167,6 +151,10 @@ class SFKInvoice:
             self.email = kwargs['email']
         else:
             self.email = "john@doe.com"
+        if 'due_days' in kwargs:
+            self.due_days = kwargs['due_days']
+        else:
+            self.due_days = 30
 
 
         self.doc = SimpleDocTemplate(self.filename, pagesize=A4,
@@ -216,8 +204,8 @@ class SFKInvoice:
         canvas.setFont("arimo", 12)
         canvas.drawString(390, 715, name)
 
-        invoice_date = today.isoformat()
-        due_date = (today + timedelta(days=betalningsvillkor+1)).isoformat()
+        invoice_date = (today + timedelta(days=-1)).isoformat()
+        due_date = (today + timedelta(days=self.due_days)).isoformat()
         # print(f"Today: {invoice_date}. Due date: {due_date}") # Works
         canvas.drawString(40, 637, f"Fakturadatum: {invoice_date}")
 
@@ -226,7 +214,7 @@ class SFKInvoice:
             ["Organisation", "Sjövalla FK"],
             ["Bankgiro", "5617-2570"],
             ["Summa att betala", f"{str(data['total_amount'])} kr"],
-            ["Förfallodatum", due_date + " (" + str(betalningsvillkor) + " dagar)"],
+            ["Förfallodatum", due_date + " (" + str(self.due_days) + " dagar)"],
             ["Fakturanummer", str(data["invoice_no"])]]
         canvas.setFont("arimo-bold", 12)
         text = canvas.beginText(40, 615)
@@ -387,14 +375,15 @@ class SFKInvoice:
         story.append(Spacer(1, 1*cm))
 
         sfk_contact = [
-            'Vid förfrågningar angående denna faktura, kontakta:',
+            'Vid förfrågningar angående denna faktura, maila:',
             '&nbsp;',
             self.name,
         ]
         if self.phone:
             sfk_contact.append('Telefon: ' + self.phone)
         if self.email:
-            sfk_contact.append('E-post: ' + self.email)
+            #sfk_contact.append('E-post: ' + self.email)
+            sfk_contact.append('' + self.email)
 
         for line in sfk_contact:
             p = Paragraph(line, style)

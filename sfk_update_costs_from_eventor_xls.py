@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import requests
 import xml.etree.ElementTree as et
+import time
 
 #pip3 install xlrd
 
@@ -111,6 +112,8 @@ def get_person_results(apikey, personId, fromDate, toDate):
         return res
     except:
         print(fileName + " not found. Requesting personal results from Eventor.")
+        # Try to be nice to eventor.
+        time.sleep(0.2) 
 
     # Add the Authorization header
     headers = {'ApiKey': apikey}
@@ -274,7 +277,7 @@ def calculate_discount(valid:bool, competition:str, competition_type:str, age) -
         if row.Tävling == competition:
             return dfDiscounts.at[row.Index, column]
 
-    #print("Standardsubvention för: " + competition)
+    print("Standardsubvention för: " + competition)
     return 40
 
 
@@ -356,7 +359,7 @@ assert calculate_amount_to_pay(500.40, 250.20, "Sjövalla FK 1 i 25manna", 25, T
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering +123 kr", 16, False, 40, "Person", 0, 123) == 223
 assert calculate_amount_to_pay(100, 0,  "En tävling med justering -80 kr", 16, False, 40, "Person", 0, -80) == 20
 
-def save_excel(df:pd.DataFrame, dfLog:pd.DataFrame, invoiceData, filename:str):
+def save_excel(df:pd.DataFrame, dfLog:pd.DataFrame, dfMissing:pd.DataFrame, invoiceData, filename:str):
 
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
 
@@ -550,6 +553,29 @@ def save_excel(df:pd.DataFrame, dfLog:pd.DataFrame, invoiceData, filename:str):
     worksheet.set_column(1,  1, 10)
     worksheet.set_column(2,  2, 10)
 
+    # Entries missing in export from eventor but is in results export
+    if (not dfMissing.empty):
+        dfMissing = dfMissing[~dfMissing['Name'].str.contains('O-Ringen')]
+        dfMissing = dfMissing[~dfMissing['Name'].str.contains('Veteran')]
+        dfMissing = dfMissing[~dfMissing['Name'].str.contains('Motionsorientering')]
+        dfMissing = dfMissing[~dfMissing['Name'].str.contains('KM.*Sjövalla FK')]
+        dfMissing = dfMissing.sort_values(by=['Date', 'Name', 'Family', 'Given'])
+
+        # Radera överflödiga kolumner
+        dfMissing.drop(['Type'], axis=1, inplace=True)
+
+        dfMissing.to_excel(writer, sheet_name='Saknade', index=False)
+        worksheet = writer.sheets['Saknade']
+        worksheet.set_column(0,  0, 10)
+        worksheet.set_column(1,  1, 30)
+        worksheet.set_column(2,  2, 12)
+        worksheet.set_column(3,  3, 15)
+        worksheet.set_column(4,  4, 20)
+        worksheet.set_column(5,  5, 20)
+        worksheet.set_column(6,  6, 16)
+
+
+
     # Close the Pandas Excel writer and output the Excel file.
     #writer.save()
     writer.close()
@@ -648,6 +674,9 @@ def main():
         except:
             print("Filen innehåller inte arket 'Invoices'.")
 
+    # Sortera i datum ordning
+    dfInvoices = dfInvoices.sort_values(by=['Efternamn', 'Förnamn', 'Datum'])
+
     # Försök att ladda subventionsfilen om den finns, annars skapas den senare.
     print("Läser in subventioner från: " + discountfile)
     global dfDiscounts
@@ -697,8 +726,13 @@ def main():
 
     # Lägg till email, tävlingstyp och tävlingsstatus till tabellen
     personId = -1
+    dfPersonStatus = pd.DataFrame()
+    dfMissingInExport = pd.DataFrame()
     for row in dfInvoices.itertuples():
         if (row.Person_id != personId):
+            if (not dfPersonStatus.empty):
+                dfMissingInExport = pd.concat([dfMissingInExport, dfPersonStatus], ignore_index=True, sort=False)
+
             personId = row.Person_id
             print("Start processing " + row.Förnamn + " " + row.Efternamn + " (" + str(personId) + ")")
             dfPersonStatus = get_person_results(apikey, personId, startDate, endDate)
@@ -730,6 +764,9 @@ def main():
                 dfInvoices.at[row.Index, 'Status'] = "Okänd"
                 print(f"{row.Förnamn} {row.Efternamn}, {row.Tävling}, {row.Klass} saknar resultat")
                 add_to_log('Saknar resultat', row.Datum, f"{row.Förnamn} {row.Efternamn}, {row.Tävling}, {row.Klass}")
+
+    # Remove cancelled events
+    dfInvoices = dfInvoices[~dfInvoices['Status'].str.contains('Inactive')]
 
     # Kontrollera om subvention skall ges
     dfInvoices['OK'] = dfInvoices.apply(lambda row: check_ok(row['Status'], row['Tävling'], row['EventTyp']), axis=1)
@@ -806,7 +843,7 @@ def main():
         utfil = args.infile[0].rsplit('.', 1)[0] + ' - result.xlsx'
 
     print("Sparar beräknade resultat till: " + utfil)
-    save_excel(dfInvoices, dfLog, invoices_data, utfil)
+    save_excel(dfInvoices, dfLog, dfMissingInExport, invoices_data, utfil)
 
 if __name__=="__main__":
     main()
